@@ -50,7 +50,7 @@ def is_equal(alpha_old, alpha_new):
 
 class Interval:
     def __init__(self, left, right):
-        assert(left <= right)
+        #assert(left <= right)
         self.left = left
         self.right = right
     def __str__(self):
@@ -77,11 +77,11 @@ def get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, C):
     assert(C > 0)
     if (y_1*y_2 == -1):
         k = alpha_1 - alpha_2
-        assert(within_interval(k, Interval(-C, C)))
+        #assert(within_interval(k, Interval(-C, C)))
         return Interval(max(-k, 0), C + min(-k, 0))
     elif(y_1*y_2 == 1):
         k = alpha_1 + alpha_2
-        assert(within_interval(k, Interval(0, 2*C)))
+        #assert(within_interval(k, Interval(0, 2*C)))
         return Interval(max(0, k-C), min(C, k))
     else:
         print "Label error. "
@@ -96,6 +96,7 @@ def clip(alpha, interval):
         return interval.right
 
 verbose = 2
+useTwoDimensionalData = True
 
 def on_boundary(alpha, C):
     assert(C > 0)
@@ -153,24 +154,33 @@ def get_confusion_matrix(predictions, labels):
 class SVM:
     def __init__(self, inputFileName, C):#inputFileName contains the train data. 
         assert(os.path.exists(inputFileName))
-        dataSet = read(inputFileName)
-        self.X = map(lambda sample: np.asarray(sample.x), dataSet.samples)
-        self.y = np.asarray(map(lambda sample: sample.label, dataSet.samples))
-        self.numberOfFeatures = len(self.X[0])
-        self.numberOfSamples = len(self.y)
+        header, lines = get_lines(inputFileName)
+        self.numberOfFeatures = len(header.split(","))-1
+        self.numberOfSamples = len(lines)
+        self.y = np.asarray(map(lambda line: int(line.split(",")[-1]), lines))
+        self.X = np.asarray(map(lambda line: map(lambda ele: float(ele), line.split(",")[0:-1]), lines)) 
         self.alpha = np.zeros(self.numberOfSamples)
         self.C = C
         self.beta = np.zeros(self.numberOfFeatures)
         self.beta_0 = 0.0
     def get_beta(self):
         self.beta = np.zeros(self.numberOfFeatures)
-        for i in range(self.numberOfSamples):
-            self.beta += self.alpha[i]*self.y[i]*self.X[i]
-        return self.beta
+        temp = np.multiply(self.alpha, self.y)
+        self.beta = reduce(lambda x, y: x + y, map(lambda ele: ele[0]*ele[1], zip(temp, self.X)))
     def sweep(self):
-        eps = 1.0e-16
-        for first_index in range(self.numberOfSamples):
-            for second_index in range(self.numberOfSamples):
+        eps = 1.0e-10
+        eraNumber = 20
+        sweepTimes = self.numberOfSamples/4
+        interval = sweepTimes**2/eraNumber
+        if (sweepTimes == 0 or interval == 0):
+            sweepTimes = self.numberOfSamples
+            interval = sweepTimes
+        counter = 0
+        for first_index in range(sweepTimes):
+            for second_index in range(sweepTimes):
+                counter += 1
+                if (counter%interval == 0 and verbose >= 3):
+                    print "counter = ", counter/interval, ", total = ", eraNumber
                 i = random.randint(0, self.numberOfSamples-1)
                 j = random.randint(0, self.numberOfSamples-1)
                 if (i == j):
@@ -183,7 +193,7 @@ class SVM:
                 y_2 = self.y[j]
                 s = y_1*y_2
                 interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
-                self.beta = self.get_beta()
+                self.get_beta()
                 alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/np.dot(x_1 - x_2, x_1 - x_2)
                 if (within_interval(alpha_2_star, interval_2)):
                     alpha_2_new = alpha_2_star
@@ -199,14 +209,17 @@ class SVM:
                     print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
                     print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
     def train(self):
-        iterationMax = 1000
+        iterationMax = 10
         eps = 1.0e-10
+        ofile = open("alpha_records.txt", "w")
         for i in range(iterationMax):
             alpha_old = np.asarray(map(lambda ele: ele, self.alpha))
             self.sweep()
             alpha_new = np.asarray(map(lambda ele: ele, self.alpha))
             error = np.linalg.norm(alpha_new - alpha_old)
             print "i = ", i+1, ", total = ", iterationMax, ", error = ", error
+            ofile.write("alpha:\n")
+            ofile.write(",".join(map(lambda ele: str(ele), self.alpha)) + "\n")
             if (verbose >= 3):
                 print "alpha_old: "
                 print alpha_old
@@ -214,7 +227,8 @@ class SVM:
                 print alpha_new
             if (error < eps):
                 break
-        self.beta = self.get_beta()
+        ofile.close()
+        self.get_beta()
         assert(abs(self.alpha.dot(self.y)) < eps)
         if (verbose >= 2):
             print "alpha:"
@@ -234,6 +248,27 @@ class SVM:
         self.beta_0 = np.mean(np.asarray(beta_0_values))
         if (verbose >= 2):
             print "beta_0 = ", self.beta_0
+            print "alpha*y = ", self.alpha.dot(self.y)
+        if(useTwoDimensionalData):
+            def curve(x, beta, betaZero, mu):
+                return -x*beta[0]/beta[1] + (mu - betaZero)/beta[1]
+            def generateBoundary(xLower, xUpper, beta, betaZero, mu, outputFileName):
+                x = []
+                y = []
+                cutNumber = 20
+                delta = (xUpper - xLower)/(float(cutNumber))
+                for i in range(cutNumber+1):
+                    x.append(xLower + i*delta)
+                    y.append(curve(x[i], beta, betaZero, mu))
+                ofile = open(outputFileName, "w")
+                for i in range(len(x)):
+                    ofile.write(str(x[i]) + "  " + str(y[i]) + "\n")
+                ofile.close()
+            xLower = min(map(lambda ele: ele[0], self.X))
+            xUpper = max(map(lambda ele: ele[0], self.X))
+            generateBoundary(xLower, xUpper, self.beta, self.beta_0, -1, "lowerBoundary.txt")
+            generateBoundary(xLower, xUpper, self.beta, self.beta_0, 0, "boundary.txt")
+            generateBoundary(xLower, xUpper, self.beta, self.beta_0, 1, "upperBoundary.txt")
     def test(self, testFileName):
         assert(os.path.exists(testFileName))
         header, lines = get_lines(testFileName)
@@ -258,13 +293,23 @@ def cross_validation(inputFileName, trainRatio, C):
     assert(C > 0)
     assert(os.path.exists(inputFileName))
     assert(trainRatio > 0 and trainRatio < 1)
+    print "Reading the input file ... "
     header, lines = get_lines(inputFileName)
+    print "File reading finished. "
     trainNumber = int(len(lines)*trainRatio)
+    print "Splitting the original data ... "
     print_file(header, lines[0:trainNumber], "train.csv")
     print_file(header, lines[trainNumber:], "test.csv")
+    print "Data splitting finished. "
+    print "Reading in and processing the train data ... "
     svm = SVM("train.csv", C)
+    print "Train data reading finished. "
+    print "Training the model ... "
     svm.train()
+    print "Model training finished. "
+    print "Testing the model ... "
     svm.test("test.csv")
+    print "Model testing finished. "
 
 def main():
     import sys
