@@ -96,7 +96,7 @@ def clip(alpha, interval):
         return interval.right
 
 verbose = 2
-useTwoDimensionalData = False
+useTwoDimensionalData = True
 
 def on_boundary(alpha, C):
     assert(C > 0)
@@ -106,6 +106,7 @@ def on_boundary(alpha, C):
     return False
 
 def has_violated_KKT(alpha, beta, beta_0, x, y, C):
+    #value = y*(beta.dot(x) + beta_0)
     #KKT condition: if alpha == 0, then value >= 1;
     #if alpha == C, then value <= 1;
     #if 0 < alpha < C, then value == 1. 
@@ -169,7 +170,24 @@ def get_confusion_matrix(predictions, labels):
     ofile.close()
     eps = 1.0e-10
     print "Capture-rate = ", (true_positive + eps)/(true_positive + false_positive + eps)
-    print "Incorrect slay rate = ", (false_positive + eps)/(false_positive + true_positive) 
+    print "Incorrect slay rate = ", (false_positive + eps)/(false_positive + true_positive)
+
+def get_index_pairs(n):
+    assert(n >= 2)
+    pairs = []
+    for i in range(n):
+        for j in range(i+1, n):
+            pairs.append((i,j))
+    return pairs
+
+def get_element_pairs(input_list):
+    assert(len(input_list) >= 2)
+    pairs = []
+    n = len(input_list)
+    for i in range(n):
+        for j in range(i+1, n):
+            pairs.append((input_list[i], input_list[j]))
+    return pairs
 
 class SVM:
     def __init__(self, inputFileName, C):#inputFileName contains the train data. 
@@ -189,7 +207,21 @@ class SVM:
         self.beta = np.zeros(self.numberOfFeatures)
         temp = np.multiply(self.alpha, self.y)
         self.beta = reduce(lambda x, y: x + y, map(lambda ele: ele[0]*ele[1], zip(temp, self.X)))
-    def sweep(self):
+    def get_beta_0(self):
+        boundary_indices = [i for i in range(len(self.alpha)) if on_boundary(self.alpha[i], self.C)]
+        beta_0_values = map(lambda index: self.y[index] - self.beta.dot(self.X[index]), boundary_indices)
+        if (len(beta_0_values) > 0):
+            self.beta_0 = np.mean(np.asarray(beta_0_values))
+        return beta_0_values
+    def joint_optimize(self, alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm):
+        eta = norm**2
+        interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
+        alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/eta
+        alpha_2_new = clip(alpha_2_star, interval_2)
+        s = y_1*y_2
+        alpha_1_new = alpha_1 - s*(alpha_2_new - alpha_2)
+        return alpha_1_new, alpha_2_new
+    def update_entire(self):
         eps = 1.0e-10
         eraNumber = 20
         sweepTimes = self.numberOfSamples
@@ -214,14 +246,13 @@ class SVM:
                 x_2 = self.X[j]
                 y_1 = self.y[i]
                 y_2 = self.y[j]
-                s = y_1*y_2
-                interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
-                #self.get_beta()
                 norm = np.linalg.norm(x_1 - x_2)
                 if(norm < 1.0e-8):
                     continue
+                '''
+                s = y_1*y_2
+                interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
                 eta = norm*norm
-                #assert(eta > eps)
                 alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/eta
                 if (within_interval(alpha_2_star, interval_2)):
                     alpha_2_new = alpha_2_star
@@ -230,6 +261,8 @@ class SVM:
                 else:
                     alpha_2_new = interval_2.right
                 alpha_1_new = alpha_1 - s*(alpha_2_new - alpha_2)
+                '''
+                alpha_1_new, alpha_2_new = self.joint_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
                 #assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
                 self.alpha[i] = alpha_1_new
                 self.alpha[j] = alpha_2_new
@@ -237,13 +270,57 @@ class SVM:
                 #if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
                     #print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
                     #print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
+    def fast_update(self):
+        eps = 1.0e-10
+        eraNumber = 20
+        self.get_beta()
+        self.get_beta_0()
+        possible_indices = [i for i in range(len(self.alpha)) if has_violated_KKT(self.alpha[i], self.beta, self.beta_0, self.X[i], self.y[i], self.C)]
+        if (len(possible_indices) < 2):
+            return
+        print "Possible indices: "
+        print possible_indices
+        non_boundary_indices = [i for i in possible_indices if not on_boundary(self.alpha[i], self.C)]
+        print "Non boundary indices:"
+        print non_boundary_indices
+        if (len(non_boundary_indices) < 2):
+            return
+        pairs = get_element_pairs(non_boundary_indices)
+        sweepTimes = len(pairs)
+        interval = sweepTimes/eraNumber
+        if (interval == 0):
+            interval = sweepTimes
+        for i in range(len(pairs)):
+            if (verbose >= 3 and (i+1)%interval == 0):
+                print "i = ", (i+1)/interval, ", total = ", eraNumber
+            random_index = random.randint(sweepTimes)
+            pair = pairs[random_index]
+            first_index = pair[0]
+            second_index = pair[1]
+            alpha_1 = self.alpha[first_index]
+            alpha_2 = self.alpha[second_index]
+            x_1 = self.X[first_index]
+            x_2 = self.X[second_index]
+            y_1 = self.y[first_index]
+            y_2 = self.y[second_index]
+            norm = np.linalg.norm(x_1 - x_2)
+            if (norm < eps):
+                continue
+            alpha_1_new, alpha_2_new = self.join_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
+            self.alpha[first_index] = alpha_1_new
+            self.alpha[second_index] = alpha_2_new
+            self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
     def train(self):
         iterationMax = 30
+        updateEntireInterval = 5
         eps = 1.0e-10
         ofile = open("alpha_records.txt", "w")
         for i in range(iterationMax):
             alpha_old = np.asarray(map(lambda ele: ele, self.alpha))
-            self.sweep()
+            if (i%updateEntireInterval == 0):
+                self.update_entire()
+            else:
+                self.fast_update()
             alpha_new = np.asarray(map(lambda ele: ele, self.alpha))
             error = np.linalg.norm(alpha_new - alpha_old)
             print "i = ", i+1, ", total = ", iterationMax, ", error = ", error
@@ -270,15 +347,10 @@ class SVM:
         ofile.write(",".join(map(str, self.alpha)) + "\n")
         ofile.write("beta:" + ",".join(map(str, self.beta)) + "\n")
         ofile.close()
-        boundary_indices = [i for i in range(len(self.alpha)) if on_boundary(self.alpha[i], self.C)]
-        beta_0_values = []
-        for index in boundary_indices:
-            beta_0_values.append(self.y[index] - self.beta.dot(self.X[index]))
+        beta_0_values = self.get_beta_0()
         if (verbose >= 2):
-            print "beta_0 values: "
+            print "beta_0_values:"
             print beta_0_values
-        self.beta_0 = np.mean(np.asarray(beta_0_values))
-        if (verbose >= 2):
             print "beta_0 = ", self.beta_0
             print "alpha*y = ", self.alpha.dot(self.y)
         ofile  = open(parameterFileName, "a")
