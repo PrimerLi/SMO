@@ -178,6 +178,7 @@ class SVM:
             sweepTimes = self.numberOfSamples
             interval = sweepTimes
         counter = 0
+        self.get_beta()
         for first_index in range(sweepTimes):
             for second_index in range(sweepTimes):
                 counter += 1
@@ -195,7 +196,7 @@ class SVM:
                 y_2 = self.y[j]
                 s = y_1*y_2
                 interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
-                self.get_beta()
+                #self.get_beta()
                 alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/np.dot(x_1 - x_2, x_1 - x_2)
                 if (within_interval(alpha_2_star, interval_2)):
                     alpha_2_new = alpha_2_star
@@ -207,6 +208,7 @@ class SVM:
                 assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
                 self.alpha[i] = alpha_1_new
                 self.alpha[j] = alpha_2_new
+                self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
                 if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
                     print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
                     print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
