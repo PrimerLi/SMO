@@ -96,7 +96,7 @@ def clip(alpha, interval):
         return interval.right
 
 verbose = 2
-useTwoDimensionalData = True
+useTwoDimensionalData = False
 
 def on_boundary(alpha, C):
     assert(C > 0)
@@ -104,6 +104,26 @@ def on_boundary(alpha, C):
     if (alpha > eps and C - alpha > eps):
         return True
     return False
+
+def has_violated_KKT(alpha, beta, beta_0, x, y, C):
+    #KKT condition: if alpha == 0, then value >= 1;
+    #if alpha == C, then value <= 1;
+    #if 0 < alpha < C, then value == 1. 
+    import sys
+    assert(C > 0)
+    assert(len(beta) == len(x))
+    value = y*(beta.dot(x) + beta_0)
+    eps = 1.0e-8
+    if (abs(alpha) < eps):
+        return not value >= 1
+    elif(abs(alpha - C) < eps):
+        return not value <= 1
+    elif(abs(alpha) > eps and abs(alpha - C) > eps):
+        return not abs(value - 1) < eps
+    else:
+        print "alpha is out of bounds. Program exits. "
+        print "alpha = ", alpha, ", C = ", alpha
+        sys.exit(-1)
 
 def get_lines(inputFileName):
     assert(os.path.exists(inputFileName))
@@ -197,7 +217,12 @@ class SVM:
                 s = y_1*y_2
                 interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
                 #self.get_beta()
-                alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/np.dot(x_1 - x_2, x_1 - x_2)
+                norm = np.linalg.norm(x_1 - x_2)
+                if(norm < 1.0e-8):
+                    continue
+                eta = norm*norm
+                #assert(eta > eps)
+                alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/eta
                 if (within_interval(alpha_2_star, interval_2)):
                     alpha_2_new = alpha_2_star
                 elif(alpha_2_star < interval_2.left):
@@ -205,15 +230,15 @@ class SVM:
                 else:
                     alpha_2_new = interval_2.right
                 alpha_1_new = alpha_1 - s*(alpha_2_new - alpha_2)
-                assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
+                #assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
                 self.alpha[i] = alpha_1_new
                 self.alpha[j] = alpha_2_new
                 self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
-                if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
-                    print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
-                    print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
+                #if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
+                    #print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
+                    #print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
     def train(self):
-        iterationMax = 10
+        iterationMax = 30
         eps = 1.0e-10
         ofile = open("alpha_records.txt", "w")
         for i in range(iterationMax):
@@ -224,7 +249,7 @@ class SVM:
             print "i = ", i+1, ", total = ", iterationMax, ", error = ", error
             ofile.write("alpha:\n")
             ofile.write(",".join(map(lambda ele: str(ele), self.alpha)) + "\n")
-            if (verbose >= 3):
+            if (verbose >= 4):
                 print "alpha_old: "
                 print alpha_old
                 print "alpha_new:"
@@ -234,11 +259,17 @@ class SVM:
         ofile.close()
         self.get_beta()
         assert(abs(self.alpha.dot(self.y)) < eps)
-        if (verbose >= 2):
+        if (verbose >= 3):
             print "alpha:"
             print self.alpha
             print "beta: "
             print self.beta
+        parameterFileName = "final_parameters.txt"
+        ofile = open(parameterFileName, "w")
+        ofile.write("alpha:")
+        ofile.write(",".join(map(str, self.alpha)) + "\n")
+        ofile.write("beta:" + ",".join(map(str, self.beta)) + "\n")
+        ofile.close()
         boundary_indices = [i for i in range(len(self.alpha)) if on_boundary(self.alpha[i], self.C)]
         beta_0_values = []
         for index in boundary_indices:
@@ -250,6 +281,10 @@ class SVM:
         if (verbose >= 2):
             print "beta_0 = ", self.beta_0
             print "alpha*y = ", self.alpha.dot(self.y)
+        ofile  = open(parameterFileName, "a")
+        ofile.write("beta_0_values:" + ",".join(map(str, beta_0_values)) + "\n")
+        ofile.write("beta_0:" + str(self.beta_0) + "\n")
+        ofile.close()
         if(useTwoDimensionalData):
             def curve(x, beta, betaZero, mu):
                 return -x*beta[0]/beta[1] + (mu - betaZero)/beta[1]
@@ -320,7 +355,7 @@ def main():
         print "inputFileName = sys.argv[1], trainRatio = sys.argv[2]. "
         return -1
 
-    C = 1000
+    C = 200
     inputFileName = sys.argv[1]
     trainRatio = float(sys.argv[2])
     cross_validation(inputFileName, trainRatio, C)
