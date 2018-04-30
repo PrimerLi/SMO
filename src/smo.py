@@ -154,6 +154,7 @@ def get_confusion_matrix(predictions, labels):
 class SVM:
     def __init__(self, inputFileName, C):#inputFileName contains the train data. 
         assert(os.path.exists(inputFileName))
+        assert(C > 0)
         header, lines = get_lines(inputFileName)
         self.numberOfFeatures = len(header.split(","))-1
         self.numberOfSamples = len(lines)
@@ -163,6 +164,7 @@ class SVM:
         self.C = C
         self.beta = np.zeros(self.numberOfFeatures)
         self.beta_0 = 0.0
+        self.boundary = Interval(-self.C, self.C)
     def get_beta(self):
         self.beta = np.zeros(self.numberOfFeatures)
         temp = np.multiply(self.alpha, self.y)
@@ -170,7 +172,7 @@ class SVM:
     def sweep(self):
         eps = 1.0e-10
         eraNumber = 20
-        sweepTimes = self.numberOfSamples/4
+        sweepTimes = self.numberOfSamples
         interval = sweepTimes**2/eraNumber
         if (sweepTimes == 0 or interval == 0):
             sweepTimes = self.numberOfSamples
@@ -205,7 +207,7 @@ class SVM:
                 assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
                 self.alpha[i] = alpha_1_new
                 self.alpha[j] = alpha_2_new
-                if(verbose >= 4):
+                if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
                     print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
                     print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
     def train(self):
@@ -235,10 +237,7 @@ class SVM:
             print self.alpha
             print "beta: "
             print self.beta
-        boundary_indices = []
-        for i in range(len(self.alpha)):
-            if (on_boundary(self.alpha[i], self.C)):
-                boundary_indices.append(i)
+        boundary_indices = [i for i in range(len(self.alpha)) if on_boundary(self.alpha[i], self.C)]
         beta_0_values = []
         for index in boundary_indices:
             beta_0_values.append(self.y[index] - self.beta.dot(self.X[index]))
@@ -298,17 +297,19 @@ def cross_validation(inputFileName, trainRatio, C):
     print "File reading finished. "
     trainNumber = int(len(lines)*trainRatio)
     print "Splitting the original data ... "
-    print_file(header, lines[0:trainNumber], "train.csv")
-    print_file(header, lines[trainNumber:], "test.csv")
+    trainFileName = "train.csv"
+    testFileName = "test.csv"
+    print_file(header, lines[0:trainNumber], trainFileName)
+    print_file(header, lines[trainNumber:], testFileName)
     print "Data splitting finished. "
     print "Reading in and processing the train data ... "
-    svm = SVM("train.csv", C)
+    svm = SVM(trainFileName, C)
     print "Train data reading finished. "
     print "Training the model ... "
     svm.train()
     print "Model training finished. "
     print "Testing the model ... "
-    svm.test("test.csv")
+    svm.test(testFileName)
     print "Model testing finished. "
 
 def main():
