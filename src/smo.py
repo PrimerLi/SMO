@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 import os
 import random
@@ -98,7 +100,7 @@ def clip(alpha, interval):
     else:
         return interval.right
 
-verbose = 3
+verbose = 2
 useTwoDimensionalData = False
 
 def on_boundary(alpha, C):
@@ -173,7 +175,7 @@ def get_confusion_matrix(predictions, labels, outputFileName):
     ofile.close()
     eps = 1.0e-10
     print "Capture-rate = ", (true_positive + eps)/(true_positive + false_positive + eps)
-    print "Incorrect slay rate = ", (false_positive + eps)/(false_positive + true_positive)
+    print "Incorrect slay rate = ", (false_positive + eps)/(false_positive + true_positive + eps)
 
 def get_index_pairs(n):
     assert(n >= 2)
@@ -215,6 +217,7 @@ class SVM:
         self.beta = np.zeros(self.numberOfFeatures)
         self.beta_0 = 0.0
         self.boundary = Interval(-self.C, self.C)
+        self.pairs = get_index_pairs(len(self.alpha))
     def get_beta(self):
         self.beta = np.zeros(self.numberOfFeatures)
         temp = np.multiply(self.alpha, self.y)
@@ -235,19 +238,21 @@ class SVM:
         return alpha_1_new, alpha_2_new
     def update_entire(self):
         eps = 1.0e-10
-        eraNumber = 20
-        pairs = get_index_pairs(len(self.alpha))
-        pairs = shuffle(pairs)
-        sweepTimes = len(pairs)
+        eraNumber = 200
+        #print "Preparing all the possible alpha_1, alpha_2 pairs ... "
+        #pairs = get_index_pairs(len(self.alpha))
+        #pairs = shuffle(pairs)
+        #print "Pairs created. "
+        sweepTimes = len(self.pairs)
         interval = sweepTimes/eraNumber
         self.get_beta()
-        for i in range(len(pairs)):
+        for i in range(len(self.pairs)):
             if (interval == 0):
                 print "Update_entire step index = ", i, ", total = ", sweepTimes
             else:
                 if((i+1)%interval == 0):
                     print "Update_entire step index = ", (i+1)/interval, ", total = ", eraNumber
-            pair = pairs[i]
+            pair = self.pairs[i]
             first_index = pair[0]
             second_index = pair[1]
             alpha_1 = self.alpha[first_index]
@@ -268,16 +273,16 @@ class SVM:
         self.get_beta()
         self.get_beta_0()
         possible_indices = [i for i in range(len(self.alpha)) if has_violated_KKT(self.alpha[i], self.beta, self.beta_0, self.X[i], self.y[i], self.C)]
+        print "Length of all indices that have violated the KKT condition: ", len(possible_indices)
         if (len(possible_indices) < 2):
             return False
-        print "Indices that have violated the KKT condition: "
-        print possible_indices
+        #print possible_indices
         non_boundary_indices = [i for i in possible_indices if not on_boundary(self.alpha[i], self.C)]
-        print "Of the indices that have violated the KKT condition, non boundary indices:"
-        print non_boundary_indices
+        print "Length of the non-boundary indices that have violated the KKT condition: ", len(non_boundary_indices)
+        #print non_boundary_indices
         if (len(non_boundary_indices) < 2):
             return False
-        pairs = get_element_pairs(non_boundary_indices)
+        pairs = get_element_pairs(possible_indices)
         pairs = shuffle(pairs)
         for i in range(len(pairs)):
             if (verbose >= 3):
@@ -302,7 +307,7 @@ class SVM:
     def train(self):
         iterationMax = 50
         updateEntireFrequency = 0.1
-        updateEntireInterval = int(iterationMax*updateEntireFrequency)
+        updateEntireInterval = int(1.0/updateEntireFrequency)
         eps = 1.0e-10
         ofile = open("alpha_records.txt", "w")
         for i in range(iterationMax):
@@ -310,7 +315,12 @@ class SVM:
             if (i%updateEntireInterval == 0):
                 self.update_entire()
             else:
-                self.fast_update()
+                counter = 0
+                max_counter = 20
+                while(self.fast_update()):
+                    counter += 1
+                    if (counter > max_counter):
+                        break
             alpha_new = np.asarray(map(lambda ele: ele, self.alpha))
             error = np.linalg.norm(alpha_new - alpha_old)
             print "i = ", i+1, ", total = ", iterationMax, ", error = ", error
@@ -441,8 +451,15 @@ def main():
     trainRatio = float(sys.argv[2])
     use_sklearn = False
     if (not use_sklearn):
-        C = 200
+        C = 1000
         cross_validation(inputFileName, trainRatio, C)
+        folder = "C_" + str(C)
+        if (not os.path.exists(folder)):
+            os.mkdir(folder)
+        else:
+            os.system("rm -r " + folder)
+            os.mkdir(folder)
+        os.system("mv *txt ./" + folder)
     else:
         sklearn_cross_validation(inputFileName, trainRatio)
 
