@@ -169,7 +169,7 @@ def get_confusion_matrix(predictions, labels, outputFileName):
     print false_positive, true_positive
     ofile = open(outputFileName, "w")
     ofile.write(str(true_negative) + "  " + str(false_negative) + "\n")
-    ofile.write(str(false_positive) + "  " + str(true_positive))
+    ofile.write(str(false_positive) + "  " + str(true_positive) + "\n")
     ofile.close()
     eps = 1.0e-10
     print "Capture-rate = ", (true_positive + eps)/(true_positive + false_positive + eps)
@@ -278,11 +278,11 @@ class SVM:
         if (len(non_boundary_indices) < 2):
             return False
         pairs = get_element_pairs(non_boundary_indices)
+        pairs = shuffle(pairs)
         for i in range(len(pairs)):
             if (verbose >= 3):
                 print "Fast update step index = ", i + 1, ", total = ", len(pairs)
-            random_index = random.randint(0, len(pairs)-1)
-            pair = pairs[random_index]
+            pair = pairs[i]
             first_index = pair[0]
             second_index = pair[1]
             alpha_1 = self.alpha[first_index]
