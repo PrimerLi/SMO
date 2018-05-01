@@ -95,8 +95,8 @@ def clip(alpha, interval):
     else:
         return interval.right
 
-verbose = 2
-useTwoDimensionalData = True
+verbose = 3
+useTwoDimensionalData = False
 
 def on_boundary(alpha, C):
     assert(C > 0)
@@ -249,21 +249,7 @@ class SVM:
                 norm = np.linalg.norm(x_1 - x_2)
                 if(norm < 1.0e-8):
                     continue
-                '''
-                s = y_1*y_2
-                interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
-                eta = norm*norm
-                alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/eta
-                if (within_interval(alpha_2_star, interval_2)):
-                    alpha_2_new = alpha_2_star
-                elif(alpha_2_star < interval_2.left):
-                    alpha_2_new = interval_2.left
-                else:
-                    alpha_2_new = interval_2.right
-                alpha_1_new = alpha_1 - s*(alpha_2_new - alpha_2)
-                '''
                 alpha_1_new, alpha_2_new = self.joint_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
-                #assert(abs(alpha_1_new + s*alpha_2_new - (alpha_1 + s*alpha_2)) < eps)
                 self.alpha[i] = alpha_1_new
                 self.alpha[j] = alpha_2_new
                 self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
@@ -272,28 +258,23 @@ class SVM:
                     #print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
     def fast_update(self):
         eps = 1.0e-10
-        eraNumber = 20
         self.get_beta()
         self.get_beta_0()
         possible_indices = [i for i in range(len(self.alpha)) if has_violated_KKT(self.alpha[i], self.beta, self.beta_0, self.X[i], self.y[i], self.C)]
         if (len(possible_indices) < 2):
-            return
-        print "Possible indices: "
+            return False
+        print "Indices that have violated the KKT condition: "
         print possible_indices
         non_boundary_indices = [i for i in possible_indices if not on_boundary(self.alpha[i], self.C)]
-        print "Non boundary indices:"
+        print "Of the indices that have violated the KKT condition, non boundary indices:"
         print non_boundary_indices
         if (len(non_boundary_indices) < 2):
-            return
+            return False
         pairs = get_element_pairs(non_boundary_indices)
-        sweepTimes = len(pairs)
-        interval = sweepTimes/eraNumber
-        if (interval == 0):
-            interval = sweepTimes
         for i in range(len(pairs)):
-            if (verbose >= 3 and (i+1)%interval == 0):
-                print "i = ", (i+1)/interval, ", total = ", eraNumber
-            random_index = random.randint(sweepTimes)
+            if (verbose >= 3):
+                print "Fast update step index = ", i + 1, ", total = ", len(pairs)
+            random_index = random.randint(0, len(pairs)-1)
             pair = pairs[random_index]
             first_index = pair[0]
             second_index = pair[1]
@@ -306,13 +287,15 @@ class SVM:
             norm = np.linalg.norm(x_1 - x_2)
             if (norm < eps):
                 continue
-            alpha_1_new, alpha_2_new = self.join_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
+            alpha_1_new, alpha_2_new = self.joint_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
             self.alpha[first_index] = alpha_1_new
             self.alpha[second_index] = alpha_2_new
             self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
+        return True
     def train(self):
-        iterationMax = 30
-        updateEntireInterval = 5
+        iterationMax = 50
+        updateEntireFrequency = 0.1
+        updateEntireInterval = int(iterationMax*updateEntireFrequency)
         eps = 1.0e-10
         ofile = open("alpha_records.txt", "w")
         for i in range(iterationMax):
