@@ -39,9 +39,12 @@ def read(inputFileName):
         else:
             lines.append(string.strip("\n"))
     ifile.close()
-    samples = map(lambda line: to_sample(line), lines)
-    dataSet = DataSet(samples)
-    return dataSet
+    X = map(lambda line: map(lambda ele: float(ele), line.split(",")[0:-1]), lines)
+    y = map(lambda line: int(line.split(",")[-1]), lines)
+    return X, y
+    #samples = map(lambda line: to_sample(line), lines)
+    #dataSet = DataSet(samples)
+    #return dataSet
 
 def is_equal(alpha_old, alpha_new):
     assert(len(alpha_old) == len(alpha_new))
@@ -145,7 +148,7 @@ def get_lines(inputFileName):
      ------------------------------------------------
      Prediction P         FP      |     TP
 '''            
-def get_confusion_matrix(predictions, labels):
+def get_confusion_matrix(predictions, labels, outputFileName):
     assert(len(predictions) == len(labels))
     true_negative = 0.0
     false_negative = 0.0
@@ -164,7 +167,7 @@ def get_confusion_matrix(predictions, labels):
                  true_negative += 1.
     print true_negative, false_negative
     print false_positive, true_positive
-    ofile = open("confusion_matrix.txt", "w")
+    ofile = open(outputFileName, "w")
     ofile.write(str(true_negative) + "  " + str(false_negative) + "\n")
     ofile.write(str(false_positive) + "  " + str(true_positive))
     ofile.close()
@@ -373,7 +376,7 @@ class SVM:
         for i in range(len(predictions)):
             ofile.write(str(predictions[i]) + "," + str(labels[i]) + "\n")
         ofile.close()
-        get_confusion_matrix(predictions, labels)
+        get_confusion_matrix(predictions, labels, "confusion_matrix.txt")
 
 def print_file(header, lines, outputFileName):
     ofile = open(outputFileName, "w")
@@ -404,7 +407,25 @@ def cross_validation(inputFileName, trainRatio, C):
     print "Model training finished. "
     print "Testing the model ... "
     svm.test(testFileName)
+    print "Model testing finished."
+    print "Done."
+
+def sklearn_cross_validation(inputFileName, trainRatio):
+    assert(os.path.exists(inputFileName))
+    assert(trainRatio > 0 and trainRatio < 1)
+    X, y = read(inputFileName)
+    trainNumber = int(trainRatio*len(y))
+    from sklearn import svm
+    clf = svm.SVC()
+    print "Training the model ... "
+    clf.fit(X[0:trainNumber], y[0:trainNumber])
+    print "Model training finished. "
+    print "Testing the model ... "
+    predictions = map(lambda x: clf.predict(x), X[trainNumber:])
+    labels = y[trainNumber:]
+    get_confusion_matrix(predictions, labels, "sklearn_confusion_matrix.txt")
     print "Model testing finished. "
+    print "Done. "
 
 def main():
     import sys
@@ -412,10 +433,15 @@ def main():
         print "inputFileName = sys.argv[1], trainRatio = sys.argv[2]. "
         return -1
 
-    C = 200
     inputFileName = sys.argv[1]
     trainRatio = float(sys.argv[2])
-    cross_validation(inputFileName, trainRatio, C)
+    use_sklearn = False
+    if (not use_sklearn):
+        C = 200
+        cross_validation(inputFileName, trainRatio, C)
+    else:
+        sklearn_cross_validation(inputFileName, trainRatio)
+
     return 0
 
 if __name__ == "__main__":
