@@ -324,21 +324,23 @@ class SVM:
             print self.alpha
             print "beta: "
             print self.beta
-        parameterFileName = "final_parameters.txt"
+        parameterFileName = "final_results.txt"
         ofile = open(parameterFileName, "w")
         ofile.write("alpha:")
         ofile.write(",".join(map(str, self.alpha)) + "\n")
         ofile.write("beta:" + ",".join(map(str, self.beta)) + "\n")
         ofile.close()
         beta_0_values = self.get_beta_0()
+        alpha_dot_y = self.alpha.dot(self.y)
         if (verbose >= 2):
             print "beta_0_values:"
             print beta_0_values
             print "beta_0 = ", self.beta_0
-            print "alpha*y = ", self.alpha.dot(self.y)
+            print "alpha*y = ", alpha_dot_y 
         ofile  = open(parameterFileName, "a")
         ofile.write("beta_0_values:" + ",".join(map(str, beta_0_values)) + "\n")
         ofile.write("beta_0:" + str(self.beta_0) + "\n")
+        ofile.write("alpha_dot_y:" + str(alpha_dot_y) + "\n")
         ofile.close()
         if(useTwoDimensionalData):
             def curve(x, beta, betaZero, mu):
