@@ -112,7 +112,7 @@ def has_violated_KKT(alpha, beta, beta_0, x, y, C):
     #value = y*(beta.dot(x) + beta_0)
     #KKT condition: if alpha == 0, then value >= 1;
     #if alpha == C, then value <= 1;
-    #if 0 < alpha < C, then value == 1. 
+    #if 0 < alpha < C, then value == 1.
     import sys
     assert(C > 0)
     assert(len(beta) == len(x))
@@ -192,6 +192,15 @@ def get_element_pairs(input_list):
             pairs.append((input_list[i], input_list[j]))
     return pairs
 
+def shuffle(input_list):
+    size = len(input_list)
+    for i in range(size):
+        random_index = random.randint(0, size-1)
+        temp = input_list[i]
+        input_list[i] = input_list[random_index]
+        input_list[random_index] = temp
+    return input_list
+
 class SVM:
     def __init__(self, inputFileName, C):#inputFileName contains the train data. 
         assert(os.path.exists(inputFileName))
@@ -227,38 +236,33 @@ class SVM:
     def update_entire(self):
         eps = 1.0e-10
         eraNumber = 20
-        sweepTimes = self.numberOfSamples
-        interval = sweepTimes**2/eraNumber
-        if (sweepTimes == 0 or interval == 0):
-            sweepTimes = self.numberOfSamples
-            interval = sweepTimes
-        counter = 0
+        pairs = get_index_pairs(len(self.alpha))
+        pairs = shuffle(pairs)
+        sweepTimes = len(pairs)
+        interval = sweepTimes/eraNumber
         self.get_beta()
-        for first_index in range(sweepTimes):
-            for second_index in range(sweepTimes):
-                counter += 1
-                if (counter%interval == 0 and verbose >= 3):
-                    print "counter = ", counter/interval, ", total = ", eraNumber
-                i = random.randint(0, self.numberOfSamples-1)
-                j = random.randint(0, self.numberOfSamples-1)
-                if (i == j):
-                    continue
-                alpha_1 = self.alpha[i]
-                alpha_2 = self.alpha[j]
-                x_1 = self.X[i]
-                x_2 = self.X[j]
-                y_1 = self.y[i]
-                y_2 = self.y[j]
-                norm = np.linalg.norm(x_1 - x_2)
-                if(norm < 1.0e-8):
-                    continue
-                alpha_1_new, alpha_2_new = self.joint_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
-                self.alpha[i] = alpha_1_new
-                self.alpha[j] = alpha_2_new
-                self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
-                #if(verbose >= 4 or not within_interval(alpha_1_new, self.boundary) or not within_interval(alpha_2_new, self.boundary)):
-                    #print "alpha_1_old: ", alpha_1, "alpha_1_new: ", alpha_1_new
-                    #print "alpha_2_old: ", alpha_2, "alpha_2_new: ", alpha_2_new
+        for i in range(len(pairs)):
+            if (interval == 0):
+                print "Update_entire step index = ", i, ", total = ", sweepTimes
+            else:
+                if((i+1)%interval == 0):
+                    print "Update_entire step index = ", (i+1)/interval, ", total = ", eraNumber
+            pair = pairs[i]
+            first_index = pair[0]
+            second_index = pair[1]
+            alpha_1 = self.alpha[first_index]
+            alpha_2 = self.alpha[second_index]
+            x_1 = self.X[first_index]
+            x_2 = self.X[second_index]
+            y_1 = self.y[first_index]
+            y_2 = self.y[second_index]
+            norm = np.linalg.norm(x_1 - x_2)
+            if (norm < 1.0e-8):
+                continue
+            alpha_1_new, alpha_2_new = self.joint_optimize(alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm)
+            self.alpha[first_index] = alpha_1_new
+            self.alpha[second_index] = alpha_2_new
+            self.beta = self.beta + (alpha_1_new - alpha_1)*y_1*x_1 + (alpha_2_new - alpha_2)*y_2*x_2
     def fast_update(self):
         eps = 1.0e-10
         self.get_beta()
