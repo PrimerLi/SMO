@@ -71,34 +71,34 @@ def get_alpha_1_limit(alpha_1, alpha_2, y_1, y_2, C):
     assert(C > 0)
     if (y_1*y_2 == -1):
         k = alpha_1 - alpha_2
-        assert(True or within_interval(k, Interval(-C, C)))
-        return Interval(max(0, k), C + min(0, k))
+        #assert(within_interval(k, Interval(-C, C)))
+        return max(0, k), C + min(0, k)
     elif(y_1*y_2 == 1):
         k = alpha_1 + alpha_2
-        assert(True or within_interval(k, Interval(0, 2*C)))
-        return Interval(max(0, k-C), min(C, k))
+        #assert(within_interval(k, Interval(0, 2*C)))
+        return max(0, k-C), min(C, k)
 
 def get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, C):
     assert(C > 0)
     if (y_1*y_2 == -1):
         k = alpha_1 - alpha_2
         #assert(within_interval(k, Interval(-C, C)))
-        return Interval(max(-k, 0), C + min(-k, 0))
+        return max(-k, 0), C + min(-k, 0)
     elif(y_1*y_2 == 1):
         k = alpha_1 + alpha_2
         #assert(within_interval(k, Interval(0, 2*C)))
-        return Interval(max(0, k-C), min(C, k))
+        return max(0, k-C), min(C, k)
     else:
         print "Label error. "
         sys.exit(-1)
 
-def clip(alpha, interval): 
-    if (within_interval(alpha, interval)):
+def clip(alpha, left, right): 
+    if (left <= alpha and alpha <= right):
         return alpha
-    elif(alpha < interval.left):
-        return interval.left
+    elif(alpha < left):
+        return left
     else:
-        return interval.right
+        return right
 
 verbose = 2
 useTwoDimensionalData = False
@@ -221,7 +221,6 @@ class SVM:
         self.C = C
         self.beta = np.zeros(self.numberOfFeatures)
         self.beta_0 = 0.0
-        self.boundary = Interval(-self.C, self.C)
         self.pairs = get_index_pairs(len(self.alpha))
     def get_beta(self):
         self.beta = np.zeros(self.numberOfFeatures)
@@ -235,9 +234,9 @@ class SVM:
         return beta_0_values
     def joint_optimize(self, alpha_1, alpha_2, x_1, x_2, y_1, y_2, norm):
         eta = norm**2
-        interval_2 = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
+        left, right = get_alpha_2_limit(alpha_1, alpha_2, y_1, y_2, self.C)
         alpha_2_star = alpha_2 + y_2*((self.beta.dot(x_1) - y_1) - (self.beta.dot(x_2) - y_2))/eta
-        alpha_2_new = clip(alpha_2_star, interval_2)
+        alpha_2_new = clip(alpha_2_star, left, right)
         s = y_1*y_2
         alpha_1_new = alpha_1 - s*(alpha_2_new - alpha_2)
         return alpha_1_new, alpha_2_new
@@ -278,15 +277,15 @@ class SVM:
         self.get_beta()
         self.get_beta_0()
         possible_indices = [i for i in range(len(self.alpha)) if has_violated_KKT(self.alpha[i], self.beta, self.beta_0, self.X[i], self.y[i], self.C)]
-        print "Length of all indices that have violated the KKT condition: ", len(possible_indices)
+        print "Number of alpha's that have violated the KKT condition: ", len(possible_indices)
         if (len(possible_indices) < 2):
             return False
         #print possible_indices
         non_boundary_indices = [i for i in possible_indices if not on_boundary(self.alpha[i], self.C)]
-        print "Length of the non-boundary indices that have violated the KKT condition: ", len(non_boundary_indices)
+        print "Number of non-boundary alpha's that have violated the KKT condition: ", len(non_boundary_indices)
         #print non_boundary_indices
-        if (len(non_boundary_indices) < 2):
-            return False
+        #if (len(non_boundary_indices) < 2):
+        #    return False
         pairs = get_element_pairs(possible_indices)
         pairs = shuffle(pairs)
         for i in range(len(pairs)):
@@ -464,7 +463,7 @@ def main():
         else:
             os.system("rm -r " + folder)
             os.mkdir(folder)
-        os.system("mv *txt ./" + folder)
+        os.system("cp *txt ./" + folder)
     else:
         sklearn_cross_validation(inputFileName, trainRatio)
 
