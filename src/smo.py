@@ -169,13 +169,18 @@ def get_confusion_matrix(predictions, labels, outputFileName):
                  true_negative += 1.
     print true_negative, false_negative
     print false_positive, true_positive
+    eps = 1.0e-10
+    capture_rate = (true_positive + eps)/(true_positive + false_positive + eps)
+    incorrect_slay_rate = (false_positive + eps)/(false_positive + true_positive + eps)
+    print "Capture rate = ", capture_rate
+    print "Incorrect slay rate = ", incorrect_slay_rate 
     ofile = open(outputFileName, "w")
+    ofile.write("Confusion matrix: \n")
     ofile.write(str(true_negative) + "  " + str(false_negative) + "\n")
     ofile.write(str(false_positive) + "  " + str(true_positive) + "\n")
+    ofile.write("Capture rate = " + str(capture_rate) + "\n")
+    ofile.write("Incorrect slay rate = " + str(incorrect_slay_rate) + "\n")
     ofile.close()
-    eps = 1.0e-10
-    print "Capture-rate = ", (true_positive + eps)/(true_positive + false_positive + eps)
-    print "Incorrect slay rate = ", (false_positive + eps)/(false_positive + true_positive + eps)
 
 def get_index_pairs(n):
     assert(n >= 2)
