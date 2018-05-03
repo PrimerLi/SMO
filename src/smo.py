@@ -170,7 +170,7 @@ def get_confusion_matrix(predictions, labels, outputFileName):
     print true_negative, false_negative
     print false_positive, true_positive
     eps = 1.0e-10
-    capture_rate = (true_positive + eps)/(true_positive + false_positive + eps)
+    capture_rate = (true_positive + eps)/(true_positive + false_negative + eps)
     incorrect_slay_rate = (false_positive + eps)/(false_positive + true_positive + eps)
     print "Capture rate = ", capture_rate
     print "Incorrect slay rate = ", incorrect_slay_rate 
