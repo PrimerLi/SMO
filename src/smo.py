@@ -242,7 +242,7 @@ class SVM:
         return alpha_1_new, alpha_2_new
     def update_entire(self):
         eps = 1.0e-10
-        eraNumber = 20
+        eraNumber = 10
         #print "Preparing all the possible alpha_1, alpha_2 pairs ... "
         #pairs = get_index_pairs(len(self.alpha))
         #pairs = shuffle(pairs)
@@ -251,10 +251,10 @@ class SVM:
         interval = sweepTimes/eraNumber
         self.get_beta()
         for i in range(len(self.pairs)):
-            if (verbose >= 3 and interval == 0):
+            if (verbose >= 2 and interval == 0):
                 print "Update_entire step index = ", i, ", total = ", sweepTimes
             else:
-                if(verbose >= 3 and (i+1)%interval == 0):
+                if(verbose >= 2 and (i+1)%interval == 0):
                     print "Update_entire step index = ", (i+1)/interval, ", total = ", eraNumber
             pair = self.pairs[i]
             first_index = pair[0]
@@ -474,7 +474,10 @@ def main():
     else:
         sklearn_cross_validation(inputFileName, trainRatio)
     endTime = time.time()
-    print "Total time used in ms: ", (endTime - startTime)*1000
+    print "Total time used in seconds: ", (endTime - startTime)
+    ofile = open("time.txt", "w")
+    ofile.write("Total time used in seconds: " + str(endTime - startTime))
+    ofile.close()
 
     return 0
 
