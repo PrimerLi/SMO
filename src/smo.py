@@ -242,7 +242,7 @@ class SVM:
         return alpha_1_new, alpha_2_new
     def update_entire(self):
         eps = 1.0e-10
-        eraNumber = 200
+        eraNumber = 20
         #print "Preparing all the possible alpha_1, alpha_2 pairs ... "
         #pairs = get_index_pairs(len(self.alpha))
         #pairs = shuffle(pairs)
@@ -251,10 +251,10 @@ class SVM:
         interval = sweepTimes/eraNumber
         self.get_beta()
         for i in range(len(self.pairs)):
-            if (interval == 0):
+            if (verbose >= 3 and interval == 0):
                 print "Update_entire step index = ", i, ", total = ", sweepTimes
             else:
-                if((i+1)%interval == 0):
+                if(verbose >= 3 and (i+1)%interval == 0):
                     print "Update_entire step index = ", (i+1)/interval, ", total = ", eraNumber
             pair = self.pairs[i]
             first_index = pair[0]
@@ -277,12 +277,13 @@ class SVM:
         self.get_beta()
         self.get_beta_0()
         possible_indices = [i for i in range(len(self.alpha)) if has_violated_KKT(self.alpha[i], self.beta, self.beta_0, self.X[i], self.y[i], self.C)]
-        print "Number of alpha's that have violated the KKT condition: ", len(possible_indices)
         if (len(possible_indices) < 2):
             return False
         #print possible_indices
         non_boundary_indices = [i for i in possible_indices if not on_boundary(self.alpha[i], self.C)]
-        print "Number of non-boundary alpha's that have violated the KKT condition: ", len(non_boundary_indices)
+        if (verbose >= 2):
+            print "Number of alpha's that have violated the KKT condition: ", len(possible_indices)
+            print "Number of non-boundary alpha's that have violated the KKT condition: ", len(non_boundary_indices)
         #print non_boundary_indices
         #if (len(non_boundary_indices) < 2):
         #    return False
@@ -310,13 +311,14 @@ class SVM:
         return True
     def train(self):
         iterationMax = 50
-        updateEntireFrequency = 0.1
+        updateEntireFrequency = 0.3
         updateEntireInterval = int(1.0/updateEntireFrequency)
         eps = 1.0e-10
         ofile = open("alpha_records.txt", "w")
+        error_writer = open("error.txt", "w")
         for i in range(iterationMax):
             alpha_old = np.asarray(map(lambda ele: ele, self.alpha))
-            if (i%updateEntireInterval == 0):
+            if (i%updateEntireInterval == 0 or i == iterationMax-1):
                 self.update_entire()
             else:
                 counter = 0
@@ -328,6 +330,7 @@ class SVM:
             alpha_new = np.asarray(map(lambda ele: ele, self.alpha))
             error = np.linalg.norm(alpha_new - alpha_old)
             print "i = ", i+1, ", total = ", iterationMax, ", error = ", error
+            error_writer.write(str(i + 1) + "  " + str(error) + "\n")
             ofile.write("alpha:\n")
             ofile.write(",".join(map(lambda ele: str(ele), self.alpha)) + "\n")
             if (verbose >= 4):
@@ -337,6 +340,7 @@ class SVM:
                 print alpha_new
             if (error < eps):
                 break
+        error_writer.close()
         ofile.close()
         self.get_beta()
         assert(abs(self.alpha.dot(self.y)) < eps)
@@ -447,10 +451,13 @@ def sklearn_cross_validation(inputFileName, trainRatio):
 
 def main():
     import sys
+    import time
+
     if (len(sys.argv) != 3):
         print "inputFileName = sys.argv[1], trainRatio = sys.argv[2]. "
         return -1
 
+    startTime = time.time()
     inputFileName = sys.argv[1]
     trainRatio = float(sys.argv[2])
     use_sklearn = False
@@ -466,6 +473,8 @@ def main():
         os.system("cp *txt ./" + folder)
     else:
         sklearn_cross_validation(inputFileName, trainRatio)
+    endTime = time.time()
+    print "Total time used in ms: ", (endTime - startTime)*1000
 
     return 0
 
