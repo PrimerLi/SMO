@@ -101,7 +101,6 @@ def clip(alpha, left, right):
         return right
 
 verbose = 2
-useTwoDimensionalData = False
 
 def on_boundary(alpha, C):
     assert(C > 0)
@@ -367,7 +366,8 @@ class SVM:
         ofile.write("beta_0:" + str(self.beta_0) + "\n")
         ofile.write("alpha_dot_y:" + str(alpha_dot_y) + "\n")
         ofile.close()
-        if(useTwoDimensionalData):
+        useTwoDimensionalData = (len(self.beta) == 2)
+        if(useTwoDimensionalData and verbose >= 2):
             def curve(x, beta, betaZero, mu):
                 return -x*beta[0]/beta[1] + (mu - betaZero)/beta[1]
             def generateBoundary(xLower, xUpper, beta, betaZero, mu, outputFileName):
