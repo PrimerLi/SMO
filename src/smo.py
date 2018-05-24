@@ -1,3 +1,9 @@
+'''
+CopyRight 2018
+@author Enzhi Li
+All rights reserved. 
+'''
+
 #!/usr/bin/env python
 
 import numpy as np
